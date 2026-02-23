@@ -1,0 +1,15 @@
+Package: leanclust
+Title: Student Performance Clustering and Classification
+Version: 0.0.0.9000
+Authors@R: 
+    person("Sertan", "SAFAK", , "setosfk@outlook.com", role = c("aut", "cre"))
+Description: Provides lean and efficient clustering algorithms to analyze 
+    student data. It automatically evaluates and assigns students into 
+    specific performance classes based on their academic success within 
+    their respective classrooms. Designed for fast and reproducible 
+    educational data mining.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
