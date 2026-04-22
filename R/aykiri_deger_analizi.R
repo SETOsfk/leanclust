@@ -47,7 +47,13 @@ aykiri_deger_analizi <- function(veri, grafik = FALSE) {
   # 3. AYKIRI DEGERLERI TESPIT ET
   aykiri_indeks   <- which(veri < alt_sinir | veri > ust_sinir)
   aykiri_degerler <- veri[aykiri_indeks]
-  temiz_veri      <- veri[-aykiri_indeks]
+  # Not: length(aykiri_indeks) == 0 iken veri[-integer(0)] bos vektor
+  # doner; o yuzden acik kontrol yapiyoruz.
+  temiz_veri      <- if (length(aykiri_indeks) > 0L) {
+    veri[-aykiri_indeks]
+  } else {
+    veri
+  }
 
   # 4. OZET TABLO
   ozet_df <- data.frame(
