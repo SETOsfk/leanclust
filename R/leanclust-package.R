@@ -11,7 +11,8 @@
 #' * [ogrenci_zaman_serisi_kumele()]: DTW + Ward.D2 zaman serisi kümeleme
 #' * [performans_sinifi_ata()]: Kural tabanlı performans sınıflandırması
 #' * [ozet_kumele()]: Küme bazlı özet tablosu (`gt`)
-#' * [kumele_grafik()]: Küme görselleştirmesi (`ggplot2`)
+#' * [kumele_grafik()]: K-means kümelerini (x, y) düzleminde görselleştirme (`ggplot2`)
+#' * [trajektor_grafik()]: Zaman serisi kümelerini trajektör olarak görselleştirme (`ggplot2`)
 #' * [tespit_et_outlier()]: Tukey IQR aykırı değer tespiti
 #' * [aykiri_deger_analizi()]: Aykırı değer özet raporu
 #'

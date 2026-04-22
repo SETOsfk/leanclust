@@ -1,0 +1,19 @@
+citHeader("leanclust paketine atıfta bulunmak için:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "leanclust: Student Performance Clustering and Classification",
+  author   = person("Sertan", "SAFAK",
+                    email = "setosfk@outlook.com",
+                    role  = c("aut", "cre")),
+  year     = format(Sys.Date(), "%Y"),
+  note     = sprintf("R package version %s",
+                     utils::packageVersion("leanclust")),
+  url      = "https://github.com/SETOsfk/leanclust"
+)
+
+citFooter(
+  "Dynamic Time Warping tabanli kumeleme icin Giorgino (2009) ve ",
+  "Ward.D2 icin Murtagh & Legendre (2014) makalelerine de ",
+  "atifta bulunmaniz tavsiye edilir."
+)

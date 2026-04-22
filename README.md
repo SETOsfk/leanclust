@@ -7,9 +7,11 @@ Student Performance Clustering and Classification — IST 5560 ders
 paketi.
 
 `leanclust`, eğitim veri madenciliği için hazırlanmış *lean* bir R
-paketidir. Öğrenci performansını kümeleme, kural tabanlı
-sınıflandırma, aykırı değer tespiti ve raporlama için birbirini
-tamamlayan fonksiyonlar sunar.
+paketidir. Öğrenci performansını iki farklı motorla kümeler
+(statik puan için k-means; kronolojik sınav dizisi için DTW + Ward.D2
+zaman serisi kümelemesi), kural tabanlı harf notu sınıflandırması
+yapar, aykırı değerleri işaretler ve sonuçları yayın kalitesinde
+tablolar ile ggplot2 grafikleriyle raporlar.
 
 ## Kurulum
 
@@ -45,8 +47,17 @@ sonuc <- ogrenci_performans_kumele(
 # 4. Yayin kaliteli gt tablosu
 ozet_kumele(sonuc)
 
-# 5. Gorsellestirme
+# 5. Gorsellestirme (k-means)
 kumele_grafik(sonuc, x = "vize", y = "final")
+
+# 6. Zaman serisi kumelemesi (DTW + Ward.D2)
+sonuc_dtw <- ogrenci_zaman_serisi_kumele(
+  veri               = ogrenci_notlari,
+  zaman_degiskenleri = c("quiz1", "quiz2", "vize", "final"),
+  k                  = 3L,
+  etiketler          = c("Dusuk", "Orta", "Yuksek")
+)
+trajektor_grafik(sonuc_dtw)
 ```
 
 ## Ana Fonksiyonlar
@@ -54,16 +65,20 @@ kumele_grafik(sonuc, x = "vize", y = "final")
 | Fonksiyon | Amaç |
 |---|---|
 | `ogrenci_performans_kumele()` | k-means tabanlı öğrenci kümeleme |
+| `ogrenci_zaman_serisi_kumele()` | DTW + Ward.D2 zaman serisi kümelemesi |
 | `performans_sinifi_ata()` | Kural veya kantil tabanlı sınıflandırma |
 | `ozet_kumele()` | Küme bazlı `gt` özet tablosu |
-| `kumele_grafik()` | `ggplot2` küme dağılım grafiği |
+| `kumele_grafik()` | K-means kümeleri için (x, y) saçılım grafiği |
+| `trajektor_grafik()` | Zaman serisi kümeleri için trajektör grafiği |
 | `tespit_et_outlier()` | Tukey IQR aykırı değer tespiti |
 | `aykiri_deger_analizi()` | Aykırı değer detaylı rapor |
 | `penguen_grafik()` | `palmerpenguins` için demo grafik |
 
 ## Veri Setleri
 
-- `ogrenci_notlari` — Sentetik öğrenci notları (30 gözlem, 6 değişken)
+- `ogrenci_notlari` — Sentetik öğrenci notları (30 gözlem, 8 değişken:
+  `ogrenci_id`, `quiz1`, `quiz2`, `vize`, `final`, `grup`, `ortalama`,
+  `harf_notu`)
 - `temiz_penguinler` — `palmerpenguins::penguins` alt kümesi (NA
   temizlenmiş)
 

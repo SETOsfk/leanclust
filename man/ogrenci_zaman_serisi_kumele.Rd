@@ -2,6 +2,7 @@
 % Please edit documentation in R/ogrenci_zaman_serisi_kumele.R
 \name{ogrenci_zaman_serisi_kumele}
 \alias{ogrenci_zaman_serisi_kumele}
+\alias{print.leanclust_zaman_serisi}
 \title{Öğrenci Zaman Serisi Kümeleme (DTW + Ward.D2)}
 \usage{
 ogrenci_zaman_serisi_kumele(
@@ -14,6 +15,8 @@ ogrenci_zaman_serisi_kumele(
   pencere = c("none", "sakoechiba"),
   pencere_genisligi = NULL
 )
+
+\method{print}{leanclust_zaman_serisi}(x, ...)
 }
 \arguments{
 \item{veri}{Bir \code{data.frame}. Her satır bir öğrenciyi, seçilen
@@ -24,37 +27,50 @@ verilen sınav sütunlarının adları (örn.
 \code{c("quiz1", "quiz2", "vize", "final")}). En az iki değişken
 olmalıdır; iki noktada DTW Öklidyene yakınsar ve uyarı üretir.}
 
-\item{k}{Küme sayısı (tam sayı). Varsayılan \code{3L}.}
+\item{k}{Küme sayısı (tam sayı). En az 2, en çok \code{nrow(veri) - 1}
+olabilir. Varsayılan \code{3L}.}
 
-\item{standartlastir}{Mantıksal. \code{TRUE} (varsayılan) ise her
-sınav sütunu z-skoruna dönüştürülür. Farklı ağırlıktaki sınavların
+\item{standartlastir}{Mantıksal. \code{TRUE} (varsayılan) ise her sınav
+sütunu z-skoruna dönüştürülür. Farklı ağırlıktaki sınavların
 mesafe hesabına eşit katkı sağlaması için önerilir.}
 
 \item{etiketler}{Karakter vektörü. Küme etiketleri; uzunluğu \code{k}
-olmalıdır. \code{NULL} (varsayılan) verilirse \code{"Kume_1"},
-\code{"Kume_2"} ... kullanılır. Etiketler küme ortalama puanına
-göre sıralanır.}
+olmalıdır. \code{NULL} (varsayılan) verilirse \code{"Kume_1"}, \code{"Kume_2"}
+... kullanılır. Etiketler küme ortalama puanına göre sıralanır:
+ilk etiket en düşük ortalamalı kümeye, son etiket en yüksek
+ortalamalı kümeye gider.}
 
-\item{dtw_adim}{DTW adım deseni (karakter). Bkz.
-\code{\link[dtw:stepPattern]{dtw::stepPattern}}. Varsayılan
-\code{"symmetric2"}.}
+\item{dtw_adim}{DTW adım deseni (karakter). \code{"symmetric1"},
+\code{"symmetric2"} ya da \code{"asymmetric"} gibi
+\link[dtw:stepPattern]{dtw::stepPattern} değerleri. Varsayılan \code{"symmetric2"}.}
 
-\item{pencere}{DTW uyarlama penceresi türü. \code{"none"}
-(varsayılan) veya \code{"sakoechiba"}.}
+\item{pencere}{DTW uyarlama penceresi türü. \code{"none"} (varsayılan)
+veya \code{"sakoechiba"}. Sakoe-Chiba penceresi zaman ekseninde
+hizalamayı belirli bir genişlikle sınırlayarak hesabı hızlandırır
+ve aşırı esnemeyi önler.}
 
 \item{pencere_genisligi}{Sakoe-Chiba penceresi için genişlik
-(tam sayı). Yalnızca \code{pencere = "sakoechiba"} iken kullanılır.}
+(tam sayı). Yalnızca \code{pencere = "sakoechiba"} iken kullanılır.
+\code{NULL} verilirse \code{max(1L, floor(seri_uzunlugu / 4))} hesaplanır.}
+
+\item{x}{\code{ogrenci_zaman_serisi_kumele()} tarafından döndürülen
+nesne.}
+
+\item{...}{Diğer \code{print} metotlarına uyum için; kullanılmaz.}
 }
 \value{
-Şu bileşenlerden oluşan bir \code{list}:
+Sınıfı \code{"leanclust_zaman_serisi"} olan, şu bileşenlerden
+oluşan bir \code{list}:
 \describe{
-\item{veri}{Orijinal veri setine \code{kume} ve \code{kume_etiketi}
-sütunları eklenmiş hali.}
+\item{veri}{Orijinal veri setine \code{kume} (tam sayı) ve
+\code{kume_etiketi} (factor) sütunları eklenmiş hali.}
 \item{hclust}{Ward.D2 ile elde edilen \code{hclust} nesnesi.}
 \item{mesafe}{DTW mesafe matrisi (\code{dist} nesnesi).}
 \item{merkezler}{Küme başına ortalama trajektör (\code{data.frame};
-satır = küme, sütun = \code{zaman_degiskenleri}). Orijinal ölçekte.}
-\item{argumanlar}{Çağrı argümanları.}
+sütunlar: \code{kume}, \verb{<zaman_degiskenleri>}, \code{etiket}). Orijinal
+ölçekte.}
+\item{argumanlar}{Çağrı argümanları (yeniden üretilebilirlik
+için).}
 }
 }
 \description{
@@ -64,13 +80,24 @@ Ward.D2 kümeleme yapar. DTW, iki serinin zaman ekseninde
 gerdirilmesine izin vererek farklı anlarda tepe yapan ama şekli
 benzer öğrenci trajektörlerini aynı kümede toplayabilir.
 }
+\section{Functions}{
+\itemize{
+\item \code{print(leanclust_zaman_serisi)}: \code{leanclust_zaman_serisi}
+sınıfı için özlü yazdırma metodu. Gözlem sayısı, küme yapısı,
+zaman ekseni ve DTW parametrelerinin bir özetini verir.
+
+}}
 \note{
-\code{dtw} paketi çalışma zamanı bağımlılığıdır ve
-\code{Suggests} listesindedir.
+\code{dtw} paketi çalışma zamanı bağımlılığıdır ve \code{Suggests}
+listesindedir. Fonksiyon, çağrılmadan önce paketin yüklü olup
+olmadığını kontrol eder ve eksikse açıklayıcı bir hata verir.
 }
 \examples{
 \donttest{
-if (requireNamespace("dtw", quietly = TRUE)) {
+if (requireNamespace("dtw", quietly = TRUE) &&
+    exists("ogrenci_notlari") &&
+    all(c("quiz1", "quiz2", "vize", "final") \%in\%
+        names(ogrenci_notlari))) {
   data(ogrenci_notlari)
   sonuc <- ogrenci_zaman_serisi_kumele(
     veri               = ogrenci_notlari,
@@ -78,10 +105,21 @@ if (requireNamespace("dtw", quietly = TRUE)) {
     k                  = 3L,
     etiketler          = c("Dusuk", "Orta", "Yuksek")
   )
+  print(sonuc)
   table(sonuc$veri$kume_etiketi)
-  sonuc$merkezler
 }
 }
+
+}
+\references{
+Giorgino, T. (2009). Computing and Visualizing Dynamic Time
+Warping Alignments in R: The dtw Package. \emph{Journal of Statistical
+Software}, 31(7). \doi{10.18637/jss.v031.i07}
+
+Murtagh, F. & Legendre, P. (2014). Ward's Hierarchical
+Agglomerative Clustering Method: Which Algorithms Implement Ward's
+Criterion? \emph{Journal of Classification}, 31(3), 274-295.
+\doi{10.1007/s00357-014-9161-z}
 }
 \seealso{
 \code{\link[=ogrenci_performans_kumele]{ogrenci_performans_kumele()}} k-means tabanlı alternatif;

@@ -19,7 +19,8 @@ fonksiyonlar sunar.
 \item \code{\link[=ogrenci_zaman_serisi_kumele]{ogrenci_zaman_serisi_kumele()}}: DTW + Ward.D2 zaman serisi kümeleme
 \item \code{\link[=performans_sinifi_ata]{performans_sinifi_ata()}}: Kural tabanlı performans sınıflandırması
 \item \code{\link[=ozet_kumele]{ozet_kumele()}}: Küme bazlı özet tablosu (\code{gt})
-\item \code{\link[=kumele_grafik]{kumele_grafik()}}: Küme görselleştirmesi (\code{ggplot2})
+\item \code{\link[=kumele_grafik]{kumele_grafik()}}: K-means kümelerini (x, y) düzleminde görselleştirme (\code{ggplot2})
+\item \code{\link[=trajektor_grafik]{trajektor_grafik()}}: Zaman serisi kümelerini trajektör olarak görselleştirme (\code{ggplot2})
 \item \code{\link[=tespit_et_outlier]{tespit_et_outlier()}}: Tukey IQR aykırı değer tespiti
 \item \code{\link[=aykiri_deger_analizi]{aykiri_deger_analizi()}}: Aykırı değer özet raporu
 }
@@ -36,11 +37,13 @@ fonksiyonlar sunar.
 \seealso{
 Useful links:
 \itemize{
-\item \url{https://github.com/SETOsfk/leanclust}
-\item Report bugs at \url{https://github.com/SETOsfk/leanclust/issues}
+  \item \url{https://github.com/SETOsfk/leanclust}
+  \item Report bugs at \url{https://github.com/SETOsfk/leanclust/issues}
 }
+
 }
 \author{
 \strong{Maintainer}: Sertan SAFAK \email{setosfk@outlook.com}
+
 }
 \keyword{internal}

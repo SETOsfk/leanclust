@@ -28,7 +28,7 @@ kümelemeden önce \code{scale()} uygulanır.}
 
 \item{etiketler}{Karakter vektörü. Uzunluğu \code{k}'ye eşit olmalıdır.
 \code{NULL} verilirse \code{c("Düşük","Orta","Yüksek")} (k = 3 için) veya
-\code{Kume_1 ... Kume_k} kullanılır.}
+\verb{Kume_1 ... Kume_k} kullanılır.}
 
 \item{nstart}{\code{\link[stats:kmeans]{stats::kmeans()}}'e iletilir. Birden fazla rastgele
 başlangıç için. Varsayılan 25.}

@@ -16,7 +16,8 @@
 \item{ortalama}{\code{numeric}. Agirlikli ortalama:
 \eqn{0.10 \cdot quiz1 + 0.10 \cdot quiz2 + 0.30 \cdot vize +
     0.50 \cdot final}.}
-\item{harf_notu}{\code{factor}. Harf notu (FF, DD, CC, BB, BA, AA).}
+\item{harf_notu}{\code{ordered factor}. Harf notu
+(\code{FF < DD < CC < BB < BA < AA}).}
 }
 }
 \source{
@@ -45,8 +46,18 @@ bilgisi icermez. Uretim scripti:
 data(ogrenci_notlari)
 head(ogrenci_notlari, 10)
 table(ogrenci_notlari$harf_notu)
-# Zaman serisi goruntusu
-matplot(t(ogrenci_notlari[, c("quiz1", "quiz2", "vize", "final")]),
-        type = "l", lty = 1, xlab = "Sinav", ylab = "Puan")
+
+# Zaman serisi goruntusu (ogrenci bazli trajektorler):
+sinav_sutunlari <- c("quiz1", "quiz2", "vize", "final")
+if (all(sinav_sutunlari \%in\% names(ogrenci_notlari))) {
+  graphics::matplot(
+    t(ogrenci_notlari[, sinav_sutunlari]),
+    type = "l", lty = 1, col = grDevices::rgb(0, 0, 0, 0.3),
+    xlab = "Sinav", ylab = "Puan",
+    xaxt = "n", main = "Ogrenci performans trajektorleri"
+  )
+  graphics::axis(1L, at = seq_along(sinav_sutunlari),
+                 labels = sinav_sutunlari)
+}
 }
 \keyword{datasets}

@@ -1,10 +1,14 @@
 ---
 title: "leanclust ile Öğrenci Performans Kümeleme"
-output: rmarkdown::html_vignette
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
 vignette: >
   %\VignetteIndexEntry{leanclust ile Öğrenci Performans Kümeleme}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
+bibliography: []
 ---
 
 ```{r, include = FALSE}
@@ -13,31 +17,10 @@ knitr::opts_chunk$set(
   comment    = "#>",
   fig.width  = 7,
   fig.height = 4.5,
-  dpi        = 96
+  dpi        = 96,
+  fig.align  = "center"
 )
 ```
-
-## Giriş
-
-`leanclust`, öğrenci performansı verilerinde ön inceleme, kural tabanlı
-sınıflandırma ve k-means tabanlı kümeleme adımlarını tek bir
-fonksiyon akışı etrafında birleştiren ince (*lean*) bir R paketidir.
-Bu belge, paketin tipik bir analiz akışında nasıl kullanıldığını
-`ogrenci_notlari` veri seti üzerinden gösterir.
-
-Ele alınan adımlar şunlardır: (i) Tukey IQR yöntemiyle aykırı değer
-tespiti, (ii) `performans_sinifi_ata()` ile kural tabanlı harf notu
-ataması, (iii) `ogrenci_performans_kumele()` ile standartlaştırılmış
-değişkenler üzerinde k-means kümeleme, (iv)
-`ogrenci_zaman_serisi_kumele()` ile sınav dizisini bir zaman serisi
-olarak ele alıp DTW mesafesi ve Ward.D2 bağlantısıyla hiyerarşik
-kümeleme, (v) `ozet_kumele()` ve `kumele_grafik()` ile sonuçların
-raporlanması.
-
-> "Bir vignette, paketinizin en iyi örnek projesidir."
-> — *R Packages*, Wickham & Bryan
-
-## Paket ve Veri
 
 ```{r setup, message = FALSE, warning = FALSE}
 library(leanclust)
@@ -47,51 +30,85 @@ library(ggplot2)
 data(ogrenci_notlari)
 ```
 
-Veri seti `r nrow(ogrenci_notlari)` öğrenciye ait altı değişken
-içerir: kimlik, vize notu, final notu, şube, ağırlıklı ortalama ve
-harf notu. Ağırlıklı ortalama şu şekilde hesaplanır:
+```{r preflight, include = FALSE}
+## Yardimci paketler icin on-kontrol.
+##   .has_dtw         : `dtw` paketi yuklu mu?
+##   .has_ts_columns  : ogrenci_notlari yeni sema (quiz1, quiz2, vize,
+##                      final) iceriyor mu?
+##   .can_run_dtw     : DTW bolumu guvenle calisir mi?
+##   .has_kableextra  : Sik tablolar icin kableExtra var mi?
+.has_dtw <- requireNamespace("dtw", quietly = TRUE)
+.has_ts_columns <- all(
+  c("quiz1", "quiz2", "vize", "final") %in% names(ogrenci_notlari)
+)
+.can_run_dtw <- isTRUE(.has_dtw) && isTRUE(.has_ts_columns)
+.has_kableextra <- requireNamespace("kableExtra", quietly = TRUE)
+
+## Ortak tablo yardimcisi: kableExtra varsa sik stil, yoksa duz kable.
+.sik_tablo <- function(x, caption = NULL, digits = 2) {
+  tab <- knitr::kable(x, caption = caption, digits = digits,
+                      format = "html")
+  if (isTRUE(.has_kableextra)) {
+    kableExtra::kable_styling(
+      tab,
+      bootstrap_options = c("striped", "hover", "condensed"),
+      full_width        = FALSE,
+      position          = "center"
+    )
+  } else {
+    tab
+  }
+}
+```
+
+## Giriş
+
+`leanclust`, öğrenci performansı verilerinde ön inceleme, kural tabanlı sınıflandırma ve iki farklı kümeleme motoru (k-means ile statik puan kümelemesi, DTW + Ward.D2 ile zaman serisi kümelemesi) sunan ince (*lean*) bir R paketidir. Bu belge, paketin tipik bir analiz akışında nasıl kullanıldığını `ogrenci_notlari` veri seti üzerinden gösterir.
+
+Ele alınan adımlar şunlardır: (i) Tukey IQR yöntemiyle aykırı değer tespiti, (ii) `performans_sinifi_ata()` ile kural tabanlı harf notu ataması, (iii) `ogrenci_performans_kumele()` ile standartlaştırılmış değişkenler üzerinde k-means kümeleme, (iv) `ogrenci_zaman_serisi_kumele()` ile sınav dizisini bir zaman serisi olarak ele alıp DTW mesafesi ve Ward.D2 bağlantısıyla hiyerarşik kümeleme, (v) `ozet_kumele()` ve `kumele_grafik()` ile sonuçların raporlanması.
+
+## Veri
+
+Veri seti `r nrow(ogrenci_notlari)` öğrenciye ait performans kayıtlarını içerir. Sınavlar kronolojik sıraya göre quiz1, quiz2, vize ve final olarak kaydedilmiştir. Ağırlıklı ortalama şu biçimde hesaplanır:
 
 $$
-\text{ortalama}_i \;=\; 0{,}4 \cdot \text{vize}_i \;+\; 0{,}6 \cdot \text{final}_i
+\text{ortalama}_i \;=\; 0{,}10\,\text{quiz1}_i + 0{,}10\,\text{quiz2}_i
+                     + 0{,}30\,\text{vize}_i  + 0{,}50\,\text{final}_i
 $$
 
-İlk on satır:
+Veri setinin ilk on satırı:
 
 ```{r}
-knitr::kable(
-  head(ogrenci_notlari, 10),
-  caption = "Tablo 1. `ogrenci_notlari` veri setinin ilk on satırı.",
-  digits  = 2
+goster_sutun <- c("ogrenci_id", "quiz1", "quiz2", "vize",
+                  "final", "ortalama", "harf_notu")
+goster_sutun <- intersect(goster_sutun, names(ogrenci_notlari))
+
+.sik_tablo(
+  head(ogrenci_notlari[, goster_sutun], 10),
+  caption = "Tablo 1. `ogrenci_notlari` veri setinin ilk on satırı."
 )
 ```
 
 ## Aykırı Değer Tespiti
 
-K-means gibi merkez tabanlı yöntemler uç noktalara duyarlı olduğundan,
-kümeleme öncesinde aykırı değerlerin incelenmesi önerilir. Tukey IQR
-yöntemi çeyrek değerler üzerinden alt ve üst sınırları belirler:
+K-means gibi merkez tabanlı yöntemler uç noktalara duyarlı olduğundan, kümeleme öncesinde aykırı değerlerin incelenmesi önerilir. Tukey IQR yöntemi çeyrek değerler üzerinden alt ve üst sınırları belirler:
 
 $$
 IQR \;=\; Q_3 - Q_1
 $$
 
-Alt sınır $Q_1 - k \cdot IQR$, üst sınır $Q_3 + k \cdot IQR$ olarak
-tanımlanır. `k = 1.5` klasik Tukey eşiğidir.
+Alt sınır $Q_1 - k \cdot IQR$, üst sınır $Q_3 + k \cdot IQR$ olarak tanımlanır. `k = 1.5` klasik Tukey eşiğidir.
 
 ```{r}
 aykiri <- tespit_et_outlier(ogrenci_notlari$ortalama, k = 1.5)
 aykiri
 ```
 
-`ortalama` değişkeninde `r length(aykiri$aykiri_degerler)` aykırı
-gözlem bulunmaktadır. Düşük aykırı oranı, k-means sonuçlarının uç
-noktalardan kaynaklanan çarpılmaya maruz kalmayacağına işaret eder.
+`ortalama` değişkeninde `r length(aykiri$aykiri_degerler)` aykırı gözlem bulunmaktadır. Düşük aykırı oranı, kümeleme sonuçlarının uç noktalardan kaynaklanan çarpılmaya maruz kalmayacağına işaret eder.
 
 ## Kural Tabanlı Sınıflandırma
 
-Türk yükseköğrenim sisteminde geleneksel harf notu eşikleri
-50-60-70-80-90 noktalarıdır. `performans_sinifi_ata()` bu eşikleri
-varsayılan olarak kullanır ve `ordered factor` döndürür:
+Türk yükseköğrenim sisteminde geleneksel harf notu eşikleri 50-60-70-80-90 noktalarıdır. `performans_sinifi_ata()` bu eşikleri varsayılan olarak kullanır ve bir `ordered factor` döndürür:
 
 ```{r}
 ogrenci_notlari$sinif_kural <- performans_sinifi_ata(
@@ -101,27 +118,14 @@ ogrenci_notlari$sinif_kural <- performans_sinifi_ata(
 table(ogrenci_notlari$sinif_kural)
 ```
 
-Kural tabanlı yaklaşımın temel avantajı yorumlanabilirliktir: her
-sınırın ne anlama geldiği doğrudan tanımlıdır. Eşikler idari olarak
-şeffaf olmakla birlikte, değişkenler arasındaki etkileşimleri
-yansıtmaz.
+Kural tabanlı yaklaşımın temel avantajı yorumlanabilirliktir: her sınırın ne anlama geldiği doğrudan tanımlıdır. Eşikler idari olarak şeffaf olmakla birlikte, değişkenler arasındaki etkileşimleri yansıtmaz.
 
-## K-means Kümeleme
+## K-means Kümelemesi
 
-`ogrenci_performans_kumele()`, değişkenleri z-standartlaştırarak
-`stats::kmeans()` çağırır ve küme etiketlerini küme ortalamasına göre
-sıralar. Böylece "Dusuk" etiketi daima en düşük puan kümesine,
-"Yuksek" etiketi ise en yüksek puan kümesine karşılık gelir.
-
-Fonksiyonun temel davranışı şu şekildedir:
-
-- Sayısal değişkenler `standartlastir = TRUE` ile z-skoruna dönüştürülür.
-- `nstart = 25` ile çoklu başlangıç denenerek yerel minimumlara karşı
-  korunma sağlanır.
-- `seed` argümanı tekrarlanabilirliği garantiler.
+`ogrenci_performans_kumele()`, seçilen değişkenleri z-standartlaştırır ve `stats::kmeans()` çağırır. Küme etiketleri küme ortalamasına göre sıralandığından, "Dusuk" etiketi daima en düşük puan kümesine, "Yuksek" etiketi en yüksek puan kümesine karşılık gelir.
 
 ```{r}
-sonuc <- ogrenci_performans_kumele(
+sonuc_km <- ogrenci_performans_kumele(
   veri        = ogrenci_notlari,
   degiskenler = c("vize", "final"),
   k           = 3,
@@ -129,164 +133,165 @@ sonuc <- ogrenci_performans_kumele(
   seed        = 42
 )
 
-sonuc$merkezler
+sonuc_km$merkezler
 ```
-
-Döndürülen liste şunları içerir: küme etiketiyle zenginleştirilmiş
-veri (`$veri`), ham `kmeans` nesnesi (`$kmeans`), orijinal ölçekteki
-küme merkezleri (`$merkezler`), özet istatistikler (`$ozet`) ve çağrı
-argümanları (`$argumanlar`).
 
 ### Küme Özeti
 
-`ozet_kumele()`, kümeleme sonucundan yayın kalitesinde bir `gt`
-tablosu üretir:
+`ozet_kumele()`, kümeleme sonucundan yayın kalitesinde bir `gt` tablosu üretir:
 
 ```{r}
-ozet_kumele(sonuc, baslik = "Küme Bazlı Vize ve Final Ortalamaları")
+ozet_kumele(sonuc_km,
+            baslik = "K-means: Küme Bazlı Vize ve Final Ortalamaları")
 ```
 
 ### Küme Dağılım Grafiği
 
-`kumele_grafik()` iki değişken üzerinde kümeleri renklendirir ve
-merkezleri "X" işaretiyle gösterir:
-
-```{r fig.cap = "Şekil 1. Vize-Final düzleminde öğrenci kümeleri. X işaretleri küme merkezlerini göstermektedir."}
-kumele_grafik(sonuc, x = "vize", y = "final",
-              baslik = "Öğrenci Performans Kümeleri")
+```{r fig.cap = "Şekil 1. Vize-final düzleminde k-means ile elde edilen öğrenci kümeleri. X işaretleri küme merkezlerini göstermektedir."}
+kumele_grafik(sonuc_km, x = "vize", y = "final",
+              baslik = "K-means: Öğrenci Performans Kümeleri")
 ```
 
 ## DTW ve Ward.D2 ile Zaman Serisi Kümelemesi
 
-K-means, her öğrenciyi vize ve final puanlarının statik bir noktası
-olarak ele alır. Oysa bir öğrencinin performansı dönem boyunca
-kronolojik bir seri oluşturur: quiz1, quiz2, vize ve final değerleri
-sırasıyla izlendiğinde, bazı öğrencilerin donuk başlayıp yükseldiği
-(*late bloomer*) ya da iyi başlayıp düştüğü trajektörler ortaya çıkar.
-`ogrenci_zaman_serisi_kumele()` bu perspektifi kullanır.
+K-means, her öğrenciyi vize ve final puanlarının statik bir noktası olarak ele alır. Oysa bir öğrencinin performansı dönem boyunca kronolojik bir seri oluşturur: quiz1, quiz2, vize ve final değerleri sırasıyla izlendiğinde, bazı öğrencilerin donuk başlayıp yükseldiği (*late bloomer*) ya da iyi başlayıp düştüğü trajektörler ortaya çıkar. `ogrenci_zaman_serisi_kumele()` bu perspektifi kullanır.
 
-İki temel tercih:
+İki temel tercihin gerekçesi şudur. **Dynamic Time Warping**, iki seriyi zaman ekseninde esneterek şeklen en yakın hizalamayı bulur; Öklidyen mesafeden farkı, aynı örüntüyü bir hafta sonra gösteren iki öğrenciyi de birbirine yakın sayabilmesidir. Şekil odaklı bir benzerlik ölçüsüdür (Giorgino, 2009). **Ward.D2 bağlantısı** hiyerarşik kümelemede kümelerarası varyans artışını minimize eder; D2 varyantı Murtagh ve Legendre (2014) tarafından karesel mesafeler üzerinden doğru formülasyon olarak önerilmiştir. DTW mesafe matrisiyle doğal olarak uyumlu çalışır ve kompakt, yorumlanabilir kümeler üretir.
 
-- **Mesafe olarak DTW.** Dynamic Time Warping, iki seriyi zaman
-  ekseninde esneterek şeklen en yakın hizalamayı bulur. Öklidyen
-  mesafeden farkı, aynı örüntüyü bir hafta önce gösteren iki öğrenciyi
-  de birbirine yakın saymasıdır. Şekil odaklı bir benzerlik ölçüsüdür.
-- **Ward.D2 bağlantısı.** Hiyerarşik kümelemede Ward yöntemi
-  kümelerarası varyans artışını minimize eder; D2 varyantı
-  Murtagh & Legendre (2014) tarafından karesel mesafeler üzerinden
-  doğru formülasyon olarak önerilmiştir. Kompakt, küresel kümeler
-  üretir ve DTW mesafe matrisiyle uyumlu çalışır.
+```{r dtw_warn, echo = FALSE, results = "asis", eval = !.can_run_dtw}
+cat(
+  "> **Not.** Bu bolum atlandi: ",
+  if (!.has_dtw)
+    "`dtw` paketi kurulu degil (`install.packages(\"dtw\")`). "
+  else "",
+  if (!.has_ts_columns)
+    paste0("`ogrenci_notlari` icinde quiz1/quiz2/vize/final ",
+           "sutunlari yok. Once ",
+           "`source(\"data-raw/ogrenci_notlari.R\")` calistiriniz. ")
+  else "",
+  "\n\n", sep = ""
+)
+```
 
-```{r eval = requireNamespace("dtw", quietly = TRUE)}
-ts_sonuc <- ogrenci_zaman_serisi_kumele(
+```{r dtw_fit, eval = .can_run_dtw}
+sonuc_dtw <- ogrenci_zaman_serisi_kumele(
   veri               = ogrenci_notlari,
   zaman_degiskenleri = c("quiz1", "quiz2", "vize", "final"),
   k                  = 3L,
   etiketler          = c("Dusuk", "Orta", "Yuksek")
 )
 
-ts_sonuc$merkezler
+sonuc_dtw
 ```
 
-Çıktı, k-means sonucunun ikizi gibi yapılandırılmıştır: `$veri`
-etiketlenmiş data.frame, `$hclust` Ward.D2 ağacı, `$mesafe` DTW mesafe
-matrisi (`dist`), `$merkezler` ise küme başına ortalama trajektör.
+Çıktı, k-means sonucunun ikizi gibi yapılandırılmıştır: `$veri` etiketlenmiş data.frame, `$hclust` Ward.D2 ağacı, `$mesafe` pairwise DTW mesafe matrisi (`dist` nesnesi), `$merkezler` ise küme başına ortalama trajektör.
 
-### Trajektör Şekilleri
+### Öğrenci Trajektörleri ve Küme Ortalamaları
 
-Küme merkezlerini sınav sırasına göre çizerek yüksek/orta/düşük
-gruplarının dönem içi seyrini karşılaştırmak mümkündür:
+`trajektor_grafik()`, her öğrenciyi kendi küme rengiyle ince bir çizgi olarak çizer ve üzerine kümenin ortalama trajektörünü kalın çizgi olarak bindirir. DTW'nin şekle dayalı gruplaması bu görselde doğrudan okunabilir: benzer eğime sahip öğrenciler aynı kümeye düşer, küme merkezleri ise grupların tipik seyrini özetler.
 
-```{r fig.cap = "Şekil 2. Küme bazlı ortalama trajektörler (quiz1 → quiz2 → vize → final).", eval = requireNamespace("dtw", quietly = TRUE)}
-sinavlar <- c("quiz1", "quiz2", "vize", "final")
-merkez_uzun <- data.frame(
-  sinav   = factor(rep(sinavlar, times = nrow(ts_sonuc$merkezler)),
-                   levels = sinavlar),
-  puan    = as.numeric(t(ts_sonuc$merkezler[, sinavlar])),
-  etiket  = rep(ts_sonuc$merkezler$etiket, each = length(sinavlar))
+```{r dtw_trajectory, eval = .can_run_dtw, fig.cap = "Şekil 2. DTW + Ward.D2 ile elde edilen öğrenci trajektörleri; kalın çizgiler küme ortalamalarıdır."}
+trajektor_grafik(sonuc_dtw)
+```
+
+Yalnızca küme ortalamalarını görmek için `goster_ogrenci = FALSE` verilebilir:
+
+```{r dtw_trajectory_means, eval = .can_run_dtw, fig.height = 3.5, fig.cap = "Şekil 3. Yalnızca küme ortalama trajektörleri (bireysel çizgiler gizli)."}
+trajektor_grafik(sonuc_dtw, goster_ogrenci = FALSE,
+                 baslik = "Küme Ortalama Trajektörleri")
+```
+
+### Hiyerarşik Yapı (Dendrogram)
+
+Ward.D2 bağlantısı bir ağaç (dendrogram) üretir. Dendrogramdaki birleşme yükseklikleri, kümelerin birleşme maliyetini (varyans artışını) gösterir; yüksek sıçramalar iyi ayrışmış kümelere işaret eder.
+
+```{r dtw_dendrogram, eval = .can_run_dtw, fig.height = 4, fig.cap = "Şekil 4. DTW mesafesi ile Ward.D2 dendrogramı. Kesik yatay çizgi k = 3 kesimini belirtir."}
+op <- par(mar = c(2, 4, 3, 1))
+plot(sonuc_dtw$hclust,
+     main = "DTW + Ward.D2 Dendrogramı",
+     sub  = "", xlab = "",
+     ylab = "Birlesme yuksekligi",
+     cex  = 0.7)
+# k = 3 icin kirmizi kutularla kesimi belirgin kil
+stats::rect.hclust(sonuc_dtw$hclust, k = 3, border = "#d7191c")
+par(op)
+```
+
+### Küme Bazlı Ortalama Dağılımı
+
+DTW kümelerinin istatistiksel ayırt ediciliği, kümelerin ağırlıklı ortalama dağılımı üzerinden gözlenebilir:
+
+```{r dtw_boxplot, eval = .can_run_dtw, fig.height = 3.8, fig.cap = "Şekil 5. DTW + Ward.D2 kümelerine göre ağırlıklı ortalama dağılımı."}
+dtw_veri <- sonuc_dtw$veri
+if ("ortalama" %in% names(dtw_veri)) {
+  ggplot(dtw_veri,
+         aes(x = kume_etiketi, y = ortalama,
+             fill = kume_etiketi)) +
+    geom_boxplot(alpha = 0.75, outlier.alpha = 0.5) +
+    labs(
+      x     = "DTW Kümesi",
+      y     = "Ağırlıklı ortalama",
+      fill  = "Küme",
+      title = "DTW Kümelerinin Ortalama Dağılımı"
+    ) +
+    theme_minimal(base_size = 12)
+}
+```
+
+### K-means ile DTW Karşılaştırması
+
+İki kümeleme motoru, aynı öğrencileri farklı benzerlik tanımlarına göre gruplar. Çapraz tablo, yöntemlerin nerede örtüşüp nerede ayrıştığını gösterir:
+
+```{r dtw_vs_km, eval = .can_run_dtw}
+karsilastirma_km_dtw <- table(
+  KMeans = sonuc_km$veri$kume_etiketi,
+  DTW    = sonuc_dtw$veri$kume_etiketi
 )
 
-ggplot(merkez_uzun,
-       aes(x = sinav, y = puan, group = etiket, color = etiket)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  labs(x = "Sınav (kronolojik)", y = "Puan",
-       color = "Küme",
-       title = "DTW + Ward.D2 Küme Ortalama Trajektörleri") +
-  theme_minimal()
-```
-
-### K-means ile DTW'nin Karşılaştırılması
-
-```{r eval = requireNamespace("dtw", quietly = TRUE)}
-table(
-  KMeans = sonuc$veri$kume_etiketi,
-  DTW    = ts_sonuc$veri$kume_etiketi
+.sik_tablo(
+  as.data.frame.matrix(karsilastirma_km_dtw),
+  caption = "Tablo 2. K-means (vize, final) × DTW + Ward.D2 (dört noktalı trajektör) çapraz tablosu."
 )
 ```
 
-İki yöntem uç kümelerde (Dusuk ve Yuksek) büyük oranda örtüşürken,
-orta bölgede ayrışma görülür. Bu ayrışma, DTW'nin değerlendirmeye
-kattığı trajektör bilgisinden kaynaklanır: k-means iki statik puanın
-ortalamasına bakarken, DTW dört noktalık dizinin şeklini dikkate
-aldığı için erken yükselen ve geç yükselen öğrencileri farklı
-kümelere yerleştirebilir.
+Uç kümelerde (Dusuk ve Yuksek) örtüşme yüksektir. Orta bölgede ortaya çıkan ayrışma, DTW'nin değerlendirmeye kattığı trajektör bilgisinden kaynaklanır: k-means iki statik puanın konumuna bakarken, DTW dört noktalık dizinin şeklini dikkate aldığı için erken yükselen ve geç yükselen öğrencileri farklı kümelere yerleştirebilir.
 
-## İki Yaklaşımın Karşılaştırılması
+## Kural Tabanlı ve K-means Yaklaşımlarının Karşılaştırılması
 
-Kural tabanlı sınıflar ile k-means etiketleri arasındaki çapraz tablo,
-iki yaklaşımın örtüşme düzeyini ortaya koyar:
+Kural tabanlı sınıflar ile k-means etiketleri arasındaki çapraz tablo, iki yaklaşımın örtüşme düzeyini ortaya koyar:
 
 ```{r}
-karsilastirma <- table(
+karsilastirma_kural_km <- table(
   Kural  = ogrenci_notlari$sinif_kural,
-  KMeans = sonuc$veri$kume_etiketi
+  KMeans = sonuc_km$veri$kume_etiketi
 )
 
-knitr::kable(
-  as.data.frame.matrix(karsilastirma),
-  caption = "Tablo 2. Kural tabanlı harf notu × k-means etiketi çapraz tablosu."
+.sik_tablo(
+  as.data.frame.matrix(karsilastirma_kural_km),
+  caption = "Tablo 3. Kural tabanlı harf notu × k-means etiketi çapraz tablosu."
 )
 ```
 
-FF ve DD notu alan öğrenciler büyük ölçüde *Dusuk* kümesine, BA ve AA
-notu alan öğrenciler ise *Yuksek* kümesine düşmektedir. Orta bölgedeki
-CC ve BB öğrencileri arasında k-means ile kural tabanlı atamanın
-ayrıştığı gözlemler bulunur; bu ayrışma, vize ve final notlarının
-birlikte değerlendirildiği durumlarda tek bir ağırlıklı ortalamanın
-gizlediği örüntülerin ortaya çıkabileceğini göstermektedir.
+FF ve DD notu alan öğrenciler büyük ölçüde Dusuk kümesine, BA ve AA notu alan öğrenciler ise Yuksek kümesine düşmektedir. Orta bölgedeki CC ve BB öğrencileri arasında k-means ile kural tabanlı atamanın ayrıştığı gözlemler bulunur; bu ayrışma, vize ve final notlarının birlikte değerlendirildiği durumlarda tek bir ağırlıklı ortalamanın gizlediği örüntülerin ortaya çıkabileceğini göstermektedir.
 
 ## Sonuç
 
-`leanclust` paketinin tasarım ilkesi, her fonksiyonun tek bir
-sorumluluk üstlenmesi ve fonksiyonların çıktılarının birbirini
-sorunsuz besleyen bir boru hattı oluşturmasıdır.
-`tespit_et_outlier()` ile aykırı değer incelemesi,
-`performans_sinifi_ata()` ile kural tabanlı sınıflandırma,
-`ogrenci_performans_kumele()` ile statik puan tabanlı k-means
-kümelemesi, `ogrenci_zaman_serisi_kumele()` ile DTW + Ward.D2
-trajektör kümelemesi ve `ozet_kumele()` / `kumele_grafik()` ile
-raporlama birleştirildiğinde; öğrenci performansı idari şeffaflık,
-istatistiksel bütünlük ve zaman boyutundaki örüntüler açısından bir
-arada değerlendirilebilir.
+`leanclust` paketinin tasarım ilkesi, her fonksiyonun tek bir sorumluluk üstlenmesi ve fonksiyonların çıktılarının birbirini sorunsuz besleyen bir boru hattı oluşturmasıdır. `tespit_et_outlier()` ile aykırı değer incelemesi, `performans_sinifi_ata()` ile kural tabanlı sınıflandırma, `ogrenci_performans_kumele()` ile statik puan tabanlı k-means kümelemesi, `ogrenci_zaman_serisi_kumele()` ile DTW + Ward.D2 trajektör kümelemesi ve `ozet_kumele()` / `kumele_grafik()` ile raporlama birleştirildiğinde; öğrenci performansı idari şeffaflık, istatistiksel bütünlük ve zaman boyutundaki örüntüler açısından bir arada değerlendirilebilir.
+
+## Kaynaklar
+
+-   Giorgino, T. (2009). Computing and Visualizing Dynamic Time Warping Alignments in R: The dtw Package. *Journal of Statistical Software*, 31(7). <https://doi.org/10.18637/jss.v031.i07>
+-   Murtagh, F. & Legendre, P. (2014). Ward's Hierarchical Agglomerative Clustering Method: Which Algorithms Implement Ward's Criterion? *Journal of Classification*, 31(3), 274-295. <https://doi.org/10.1007/s00357-014-9161-z>
 
 ## İleri Okuma
 
 Fonksiyon dokümantasyonları için:
 
-- `?ogrenci_performans_kumele`
-- `?ogrenci_zaman_serisi_kumele`
-- `?performans_sinifi_ata`
-- `?tespit_et_outlier`
-- `?aykiri_deger_analizi`
-
-DTW ve Ward.D2 hakkında daha fazla teknik okuma için:
-
-- Giorgino, T. (2009). "Computing and Visualizing Dynamic Time
-  Warping Alignments in R: The dtw Package." *JSS* 31(7).
-- Murtagh, F. & Legendre, P. (2014). "Ward's Hierarchical
-  Agglomerative Clustering Method: Which Algorithms Implement Ward's
-  Criterion?" *Journal of Classification* 31, 274-295.
+-   `?ogrenci_performans_kumele`
+-   `?ogrenci_zaman_serisi_kumele`
+-   `?performans_sinifi_ata`
+-   `?tespit_et_outlier`
+-   `?aykiri_deger_analizi`
 
 Paketin tüm vignette'lerini listelemek için:
 
